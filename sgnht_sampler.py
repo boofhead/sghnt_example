@@ -1,10 +1,12 @@
+# -*- coding: utf-8 -*-
+
 """
  Stochastic Gradient Nosé Hoover Thermostat samplers for bayesian parameter fitting
  a described in 
 """
 
 from mxnet.optimizer import Optimizer
-from mxnet.ndarray import NDArray, clip, array, sum, power
+from mxnet.ndarray import NDArray, clip, array, sum, power, full, ones
 from mxnet.random import normal
 import math
 import random
@@ -138,7 +140,7 @@ class SGNHTP(SGNHT):
         """
         lr = self._get_lr(index)
         self._set_wd(index, random.gammavariate(self.alpha, self.beta))
-        return (array([self.alpha, self.beta]),  # wd prior parameters
+        return (array([self.alpha, self.beta], weight.context, dtype=weight.dtype),  # wd prior parameters
                 normal(0, math.sqrt(lr), weight.shape, weight.context, dtype=weight.dtype))  # momentum
 
     def update(self, index, weight, grad, state):
@@ -179,3 +181,73 @@ class SGNHTP(SGNHT):
         mom[:] -= lr * (grad + wd * weight) + normal(0, math.sqrt(2 * self.a * lr), weight.shape, weight.context)
         weight[:] += mom
         self.delta_gamma += sum(power(mom, 2)).asscalar()
+
+
+@register
+class mSGNHT(Optimizer):
+    """modified Stochastic Gradient Nosé Hoover Thermostat
+
+    This class implements the modified  Stochastic Gradient Nosé Hoover Thermostat
+    sampler described in the paper *Scalable Deep Poisson Factor Analysis For Topic Modelling*,
+     available at http://people.ee.duke.edu/~lcarin/DeepPFA_ICML2015.pdf
+
+    Parameters
+    ----------
+
+    a : float
+        level of added random noise
+
+    """
+
+    def __init__(self, a=0.5, **kwargs):
+        super(mSGNHT, self).__init__(**kwargs)
+        self.a = a
+
+    def create_state(self, index, weight):
+        """Create additional optimizer state such as momentum.
+
+        Parameters
+        ----------
+        weight : NDArray
+            The weight data
+
+
+        use this to initialize wd_mult
+
+        """
+        lr = self._get_lr(index)
+        return (full(weight.shape, self.a, weight.context, dtype=weight.dtype),         # thermostat
+               normal(0, math.sqrt(lr), weight.shape, weight.context, dtype=weight.dtype))  # momentum
+
+    def update(self, index, weight, grad, state):
+        """Update the parameters.
+
+        Parameters
+        ----------
+        index : int
+            An unique integer key used to index the parameters
+
+        weight : NDArray
+            weight ndarray
+
+        grad : NDArray
+            grad ndarray
+
+        state : NDArray or other objects returned by init_state
+            The auxiliary state used in optimization.
+        """
+        assert (isinstance(weight, NDArray))
+        assert (isinstance(grad, NDArray))
+        lr = self._get_lr(index)
+        wd = self._get_wd(index)
+        self._update_count(index)
+
+        gamma, mom = state
+
+        grad = (grad + wd * weight) * self.rescale_grad
+        if self.clip_gradient is not None:
+            grad = clip(grad, -self.clip_gradient, self.clip_gradient)
+        mom[:] -= lr * (grad + gamma * mom) + \
+                  normal(0, math.sqrt(2 * self.a * lr), weight.shape, weight.context)
+        weight[:] += mom
+        gamma[:] += lr * (power(mom, 2) - ones(weight.shape, weight.context))
