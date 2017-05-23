@@ -93,7 +93,7 @@ class SGNHT(Optimizer):
 
         mom = state
 
-        grad = (grad + wd * weight) * self.rescale_grad
+        grad[:] = (grad + wd * weight) * self.rescale_grad
         if self.clip_gradient is not None:
             grad = clip(grad, -self.clip_gradient, self.clip_gradient)
         mom[:] *= (1 - self.gamma)
@@ -247,7 +247,7 @@ class mSGNHT(Optimizer):
         if self.clip_gradient is not None:
             grad = clip(grad, -self.clip_gradient, self.clip_gradient)
         mom[:] -= lr * (grad + gamma * mom) + \
-                  random_normal(0, math.sqrt(2 * self.a * lr), weight.shape, weight.context)
+            random_normal(0, math.sqrt(2 * self.a * lr), weight.shape, weight.context)
         weight[:] += mom
         gamma[:] += lr * (power(mom, 2) - ones(weight.shape, weight.context))
 
@@ -351,10 +351,10 @@ class mSGNHT_S_BADODAB(mSGNHT):
 
         mom[:] -= lr * grad
         weight[:] += lr / 2.0 * mom
-        gamma += lr / 2.0 / self.mu * (power(mom, 2.) - ones(weight.shape, weight.context))
+        gamma[:] += lr / 2.0 / self.mu * (power(mom, 2.) - ones(weight.shape, weight.context))
         mom[:] *= exp(-lr / 2. * gamma)
         mom[:] += self.a * sqrt((ones(weight.shape, weight.context) - exp(-lr * 2.0 * gamma)) / (2.0 * gamma)) * \
-                  random_normal(shape=weight.shape, ctx=weight.context)
+            random_normal(shape=weight.shape, ctx=weight.context)
         gamma += lr / 2.0 / self.mu * (power(mom, 2.) - ones(weight.shape, weight.context))
         weight[:] += lr / 2.0 * mom
 
@@ -443,9 +443,9 @@ class mSGNHTP_S_BADODAB(mSGNHT):
 
         mom[:] -= lr * grad
         weight[:] += lr / 2.0 * mom
-        gamma += lr / 2.0 / self.mu * (power(mom, 2.) - ones(weight.shape, weight.context))
+        gamma[:] += lr / 2.0 / self.mu * (power(mom, 2.) - ones(weight.shape, weight.context))
         mom[:] *= exp(-lr / 2. * gamma)
         mom[:] += self.a * sqrt((ones(weight.shape, weight.context) - exp(-lr * 2.0 * gamma)) / (2.0 * gamma)) * \
-                  random_normal(shape=weight.shape, ctx=weight.context)
+            random_normal(shape=weight.shape, ctx=weight.context)
         gamma += lr / 2.0 / self.mu * (power(mom, 2.) - ones(weight.shape, weight.context))
         weight[:] += lr / 2.0 * mom
